@@ -108,6 +108,7 @@ input, button {
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 10px;
   /* margin-left: 45%; */
 }
 
@@ -116,6 +117,23 @@ input, button {
   display: inline-block;
   /* Standard-Dateiname im Input ausblenden, Button bleibt sichtbar */
   color: transparent;
+  width: fit-content;         /* nur so breit wie der Button */
+  overflow: hidden;           /* alles rechts (Icon/Dateiname) ausblenden */
+  background: transparent;    /* kein zusätzliches Icon-Hintergrundbild */
+  border: none;               /* keine zusätzliche Rahmenfläche */
+}
+
+/* Vollständig visuell verstecken, aber klickbar über Label */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 1px, 1px) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 /* Modernes Styling für den nativen Button */
@@ -132,8 +150,8 @@ input, button {
     font-size: 1vw;
 }
 
-#logoUploader::file-selector-button:hover { opacity: .9; }
-#logoUploader::file-selector-button:active { transform: translateY(1px); }
+#logoUploader::file-selector-button:hover { opacity: .9; transform: scale(1.03); }
+#logoUploader::file-selector-button:active { transform: scale(0.99); }
 #logoUploader:focus-visible::file-selector-button { outline: 2px solid #6cf; outline-offset: 2px; }
 
 /* Fallback für ältere WebKit-Browser */
@@ -149,6 +167,31 @@ input, button {
   transition: transform .06s ease, opacity .2s ease;
       font-size: 1vw;
 }
+
+/* Label als Upload-Button im gleichen Stil wie Download */
+#uploadBtn {
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 8px; /* wie #downloadBtn */
+  padding: 10px 20px;
+  font-weight: 600;   /* eine Stufe stärker */
+  font-size: 1vw;
+  font-family: inherit;
+  margin: 10px 0;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.08s ease;
+  transform-origin: center;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2; /* wie Select */
+  box-sizing: border-box;
+  white-space: nowrap; /* einzeilig halten */
+}
+#uploadBtn:hover { background: #cccccc; transform: scale(1.03); }
+#uploadBtn:active { transform: scale(0.99); }
+#logoUploader::-webkit-file-upload-button:hover { transform: scale(1.03); }
+#logoUploader::-webkit-file-upload-button:active { transform: scale(0.99); }
 
 /* Dateiname unter dem Button */
 #fileName {
@@ -171,10 +214,11 @@ input, button {
 #action-buttons {
   display: flex;
   justify-content: flex-end;   /* Buttons nach rechts */
+  align-items: center;         /* vertikal zentrieren */
   gap: 10px;    
   width: 100%;               /* Abstand zwischen Reset & Download */
   max-width: 2048px;           /* gleiche Breite wie Canvas */
-  margin: 10px auto 0 auto;    /* mittig zentrieren */
+  margin: 0 auto 0 auto;    /* mittig zentrieren, kein zusätzlicher Versatz nach oben */
 }
 
 /* Buttons können so bleiben */
@@ -183,8 +227,19 @@ input, button {
   padding: 10px 20px;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
       font-size: 1vw;
+}
+
+/* Gleiche Typo für alle Controls im Action-Bereich */
+#downloadBtn,
+#resetBtn,
+#uploadBtn,
+#backgroundSelect {
+  font-family: inherit;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Download: aktiv/inaktiv */
@@ -192,10 +247,19 @@ input, button {
   background: #ffffff;
   color: #000000;
   border: none;
-  transition: background 0.3s ease;
+  transition: background 0.3s ease, transform 0.08s ease;
+  transform-origin: center;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2; /* wie Select */
+  box-sizing: border-box;
 }
 #downloadBtn:not(:disabled):hover {
   background: #cccccc;
+  transform: scale(1.03);
+}
+#downloadBtn:active:not(:disabled) {
+  transform: scale(0.99);
 }
 #downloadBtn:disabled {
   opacity: 0.5;
@@ -204,20 +268,54 @@ input, button {
   color: #eee;
 }
 
+/* Background-Select wie Download-Button stylen */
+#backgroundSelect {
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 1vw;
+  line-height: 1.2; /* verhindert Text-Clippen (z.B. g/j) */
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-block;            /* transform wirkt auf das ganze Control */
+  overflow: visible;                /* vermeidet Clipping bei Unterlängen */
+  will-change: transform;           /* glattere Animation */
+  transition: background 0.3s ease, transform 0.08s ease;
+  transform-origin: center;
+  /* Custom Down Arrow */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+  padding-right: 42px; /* Platz für Pfeil */
+}
+#backgroundSelect:hover {
+  background-color: #cccccc; /* nicht shorthand, damit Pfeil erhalten bleibt */
+  transform: scale(1.03);
+}
+#backgroundSelect:active { transform: scale(0.99); }
+
 /* Reset: aktiv/inaktiv */
 #resetBtn {
   background: transparent;
   color: #fff;
   border: 1px solid #666;
-  transition: opacity .2s ease;
+  transition: opacity .2s ease, transform 0.08s ease;
+  transform-origin: center;
 }
 #resetBtn:not(:disabled):hover {
   opacity: .85;
+  transform: scale(1.03);
 }
+#resetBtn:active:not(:disabled) { transform: scale(0.99); }
 #resetBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   color: #888;
   border-color: #444;
 }
-
