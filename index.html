@@ -33,7 +33,7 @@
         <p class="smalltitle">Good to know.</p>
         <p>
                   You can upload SVG or PNG files with a transparent background. <br>
-                  All colors in your logo will be automatically converted to white. <br>
+                  All colors in your logo will automatically be converted to either white or black, depending on the background you choose. <br>
                   Transparent areas remain transparent.
           <br>
           <br>
@@ -56,24 +56,25 @@
 
     <div id="upload-section">
 
-      <div class="toolbar">
-        <label for="backgroundSelect">Background:</label>
-        <select id="backgroundSelect">
-          <option value="do_not_touch.png" selected>Background 01</option>
-          <option value="background02.png">Background 02</option>
-        </select>
-
-        <label class="edit-warp">
+      <div class="toolbar" style="display:none;">
+        <!-- Hidden controls kept for functionality -->
+        <label class="edit-warp" style="display:none;">
           <input type="checkbox" id="editWarp"> Warp bearbeiten
         </label>
-        <button id="resetWarpBtn" type="button">Warp zurücksetzen</button>
+        <button id="resetWarpBtn" type="button" style="display:none;">Warp zurücksetzen</button>
       </div>
 
       <div class="allbuttons">
-        <input type="file" id="logoUploader" accept="image/*" />
+        <input type="file" id="logoUploader" accept="image/*" class="visually-hidden" />
+        <label id="uploadBtn" for="logoUploader">Datei auswählen</label>
 
         <div id="action-buttons">
           <button id="resetBtn" type="button" disabled>Reset</button>
+          <select id="backgroundSelect" aria-label="Background Auswahl">
+          <option value="background01.png">Delivery Trucks</option>
+            <option value="background02.png" selected>Glass Panel</option>
+            <option value="background03.png">Wind Turbine</option>
+          </select>
           <button id="downloadBtn" disabled>Download Image</button>
         </div>
       </div>
@@ -86,22 +87,28 @@
       // ========= Konfiguration =========
       // Reihenfolge: p0=oben-links, p1=oben-rechts, p2=unten-rechts, p3=unten-links
       const WARP_PRESETS = {
-        'do_not_touch.png': {
+        'background01.png': {
           p0: { x: 1120, y: 650 },
           p1: { x: 1366, y: 645 },
           p2: { x: 1367, y: 777 },
           p3: { x: 1119, y: 737 }
         },
         'background02.png': {
-          // Platzhalter: gleiche Werte wie erster Hintergrund; kann per UI angepasst werden
-          p0: { x: 1120, y: 650 },
-          p1: { x: 1366, y: 645 },
-          p2: { x: 1367, y: 777 },
-          p3: { x: 1119, y: 737 }
+          p0: { x: 1274, y: 659 },
+          p1: { x: 1577, y: 601 },
+          p2: { x: 1577, y: 979 },
+          p3: { x: 1274, y: 948 }
+        },
+        'background03.png': {
+          // Startwerte: gleich wie Background 02, bitte per Warp-Editor anpassen
+          p0: { x: 1223, y: 777 },
+          p1: { x: 1510, y: 848 },
+          p2: { x: 1509, y: 1045 },
+          p3: { x: 1219, y: 918 }
         }
       };
       function cloneWarp(w) { return { p0: { ...w.p0 }, p1: { ...w.p1 }, p2: { ...w.p2 }, p3: { ...w.p3 } }; }
-      let currentBg = 'do_not_touch.png';
+      let currentBg = 'background02.png';
       let LOGO_WARP = cloneWarp(WARP_PRESETS[currentBg]);
       const WARP_COLS = 60;   // mehr = glatter, aber langsamer
       const WARP_ROWS = 40;
@@ -112,7 +119,12 @@
 
 
 
-      const BLEND_MODE = 'overlay'; // für Tests: 'source-over'
+      const DEFAULT_BLEND_MODE = 'overlay'; // Fallback
+      const BLEND_MODES = {
+        'background01.png': 'overlay',
+        'background02.png': 'lighten',
+        'background03.png': 'multiply'
+      };
 
 
 
@@ -133,7 +145,8 @@
       const resetBtn = document.getElementById('resetBtn');
 
       let isBalloonLoaded = false;
-      let latestLogo = null;
+      let latestLogo = null;   // farb-transformierte Version
+      let sourceLogo = null;   // unveränderte, gerasterte Logo-Quelle (Canvas)
       let draggingPoint = null;
 
 
@@ -193,37 +206,38 @@
         }
       }); */
 
-      // Einheitlicher Upload-Handler + Weißfärbung (SVG & PNG/JPG)
-      function whitenImageToCanvas(img) {
+      // Logo-Farb-Policy pro Hintergrund (RGB)
+      const LOGO_COLORS = {
+        'background01.png': { r: 255, g: 255, b: 255 },
+        'background02.png': { r: 255, g: 255, b: 255 },
+        'background03.png': { r: 0,   g: 0,   b: 0   }
+      };
+      function getLogoColor() {
+        return LOGO_COLORS[currentBg] || { r: 255, g: 255, b: 255 };
+      }
+
+      // Helpers zum (Re)Colorisieren
+      function imageToCanvas(img) {
         const w = Math.max(1, img.naturalWidth || img.width || 1);
         const h = Math.max(1, img.naturalHeight || img.height || 1);
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
-        const cctx = c.getContext('2d');
-        cctx.drawImage(img, 0, 0, w, h);
-        try {
-          const imgData = cctx.getImageData(0, 0, w, h);
-          const data = imgData.data;
-          for (let i = 0; i < data.length; i += 4) {
-            const a = data[i + 3];
-            if (a !== 0) {
-              data[i] = 255;
-              data[i + 1] = 255;
-              data[i + 2] = 255;
-            }
-          }
-          cctx.putImageData(imgData, 0, 0);
-        } catch (e) { /* ignore taint */ }
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
         return c;
       }
-
-      function whitenCanvasInPlace(cnv) {
+      function cloneCanvas(cnv) {
+        const n = document.createElement('canvas');
+        n.width = cnv.width; n.height = cnv.height;
+        n.getContext('2d').drawImage(cnv, 0, 0);
+        return n;
+      }
+      function colorizeCanvasInPlace(cnv, color) {
         try {
           const ctx2 = cnv.getContext('2d');
           const d = ctx2.getImageData(0, 0, cnv.width, cnv.height);
           const a = d.data;
           for (let i = 0; i < a.length; i += 4) {
-            if (a[i + 3] !== 0) { a[i] = 255; a[i + 1] = 255; a[i + 2] = 255; }
+            if (a[i + 3] !== 0) { a[i] = color.r; a[i + 1] = color.g; a[i + 2] = color.b; }
           }
           ctx2.putImageData(d, 0, 0);
         } catch (_) {}
@@ -269,7 +283,8 @@
                 cnv.width = tw; cnv.height = th;
                 const c2 = cnv.getContext('2d');
                 c2.drawImage(img, 0, 0, tw, th);
-                latestLogo = whitenCanvasInPlace(cnv);
+                sourceLogo = cnv; // ungefilterte Quelle behalten
+                latestLogo = colorizeCanvasInPlace(cloneCanvas(sourceLogo), getLogoColor());
                 setButtons(true);
                 redrawCanvas();
                 URL.revokeObjectURL(url);
@@ -281,7 +296,8 @@
             reader.onload = (e) => {
               const img = new Image();
               img.onload = () => {
-                latestLogo = whitenImageToCanvas(img);
+                sourceLogo = imageToCanvas(img);
+                latestLogo = colorizeCanvasInPlace(cloneCanvas(sourceLogo), getLogoColor());
                 setButtons(true);
                 redrawCanvas();
               };
@@ -537,8 +553,9 @@
 
           ctx.save();
           const prevOp = ctx.globalCompositeOperation;
-          ctx.globalCompositeOperation = BLEND_MODE; // z.B. 'overlay'
-          if (ctx.globalCompositeOperation !== BLEND_MODE) {
+          const desiredMode = BLEND_MODES[currentBg] || DEFAULT_BLEND_MODE;
+          ctx.globalCompositeOperation = desiredMode;
+          if (ctx.globalCompositeOperation !== desiredMode) {
             ctx.globalCompositeOperation = 'screen';
           }
           drawWarpedImageContain(
@@ -567,7 +584,14 @@
           ctx.stroke();
           [LOGO_WARP.p0, LOGO_WARP.p1, LOGO_WARP.p2, LOGO_WARP.p3].forEach((p, i) => {
             ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill();
-            ctx.font = '14px sans-serif'; ctx.fillText(`p${i}`, p.x + 10, p.y - 10);
+            const tx = Math.round(p.x), ty = Math.round(p.y);
+            const label = `p${i} (${tx}, ${ty})`;
+            ctx.font = '14px sans-serif';
+            // leichte Outline für Lesbarkeit
+            ctx.save();
+            ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.strokeText(label, p.x + 12, p.y - 10);
+            ctx.restore();
+            ctx.fillText(label, p.x + 12, p.y - 10);
           });
           ctx.restore();
         }
@@ -590,6 +614,7 @@
 
       resetBtn.addEventListener('click', () => {
         latestLogo = null;
+        sourceLogo = null;
         const newInput = fileInput.cloneNode(true);
         fileInput.parentNode.replaceChild(newInput, fileInput);
         fileInput = newInput;
@@ -607,10 +632,16 @@
         const next = bgSelect.value;
         currentBg = next;
         // Warp auf Preset des neuen Hintergrunds setzen (kopie, damit editierbar)
-        const preset = WARP_PRESETS[next] || WARP_PRESETS['do_not_touch.png'];
+        const preset = WARP_PRESETS[next] || WARP_PRESETS['background01.png'];
         LOGO_WARP = cloneWarp(preset);
         isBalloonLoaded = false;
         balloonImage.src = next;
+        // Logo-Farbe an neuen Hintergrund anpassen
+        if (sourceLogo) {
+          latestLogo = colorizeCanvasInPlace(cloneCanvas(sourceLogo), getLogoColor());
+          setButtons(true);
+          redrawCanvas();
+        }
       });
 
       editWarp.addEventListener('change', () => {
@@ -619,7 +650,7 @@
       });
 
       resetWarpBtn.addEventListener('click', () => {
-        const preset = WARP_PRESETS[currentBg] || WARP_PRESETS['do_not_touch.png'];
+        const preset = WARP_PRESETS[currentBg] || WARP_PRESETS['background01.png'];
         LOGO_WARP = cloneWarp(preset);
         redrawCanvas();
       });
